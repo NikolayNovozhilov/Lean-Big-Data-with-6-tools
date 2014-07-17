@@ -1,7 +1,7 @@
 /*
 *  Lean Big Data with 6 tools from google
 *
-*  For any questions contact Nikolay Novozhilov (nik@bubbly.net)
+*  For more details visit https://sites.google.com/site/leanbigdatawith6tools/
 */
 
 var projectNumber = 'XXXXXX'; //Put your own project number
