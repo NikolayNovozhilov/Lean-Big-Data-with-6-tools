@@ -1,0 +1,222 @@
+<html>
+<head>
+<script type="text/javascript" src="https://www.google.com/jsapi"></script>
+<script type="text/javascript">
+//CONFIGURATION CONSTANTS
+var SpreadsheetID='0ApncGLYD53Q1dDVOWVJnQmNwQ1ZCRDAxSEdMZkVhUUE';
+var SheetName='Raw data';
+var Range='A2:J3000';
+var OperatorInitState= {selectedValues: ['HI']};
+
+//Load packages and call LoadData
+google.load("visualization", '1', {packages:['corechart']});
+google.load('visualization', '1.0', {'packages':['controls']});
+google.setOnLoadCallback(LoadData);
+
+//Load data from Spreadsheet
+function LoadData() {
+  var query = new google.visualization.Query('https://docs.google.com/spreadsheet/ccc?key=' + SpreadsheetID + '&sheet=' + SheetName + '&range=' + Range + '#gid=1');
+  query.send(handleQueryResponse);
+}
+
+function handleQueryResponse(response) {
+  if (response.isError()) {
+    alert('Error in query: ' + response.getMessage() + ' ' + response.getDetailedMessage());
+    return;
+  }
+
+//Populate results in data_init
+  var data_init = response.getDataTable();
+
+//Create filters that we want
+  var OperatorPicker = new google.visualization.ControlWrapper({
+        controlType: 'CategoryFilter',
+        containerId: 'OperatorPicker_div',
+        dataTable: data_init,
+        options: {
+            filterColumnLabel: 'US State',
+            ui: {
+                labelStacking: 'vertical',
+                allowTyping: false,
+                allowMultiple: false
+            }
+        },
+        state: OperatorInitState
+    });
+
+  FilterOperator(); //Generate "data" with default operator
+
+  var TimeRange = new google.visualization.ControlWrapper({
+     controlType: 'ChartRangeFilter',
+     containerId: 'TimeRange_div',
+     dataTable: data,
+     'options': {
+       'filterColumnLabel': 'Year',
+       'ui': {
+         'chartType': 'AreaChart',
+         'chartOptions': {
+           'chartArea': {'left':'10%', 'width': '70%', 'height': '20%' },
+           'hAxis': {'baselineColor': 'none'}
+         },
+         'minRangeSize': 31536000000
+       }
+     },    
+   });
+
+//Create Columns Filter
+  var columnsTable = new google.visualization.DataTable();
+  columnsTable.addColumn('number', 'colIndex');
+  columnsTable.addColumn('string', 'colLabel');
+  var initState= {selectedValues: []};
+  for (var i = 1; i < data.getNumberOfColumns(); i++) {
+    columnsTable.addRow([i, data.getColumnLabel(i)]);
+    initState.selectedValues.push(data.getColumnLabel(i));
+  }
+
+  var columnFilter = new google.visualization.ControlWrapper({
+        controlType: 'CategoryFilter',
+        containerId: 'columnFilter_div',
+        dataTable: columnsTable,
+        options: {
+            filterColumnLabel: 'colLabel',
+            ui: {
+                label: ' ',
+                caption: 'Choose race',
+                allowTyping: false,
+                allowMultiple: true,
+                allowNone: false,
+                selectedValuesLayout: 'belowStacked'
+                }
+                },
+        state: initState
+    });
+
+//Create chart
+var chart = new google.visualization.ChartWrapper({
+     'chartType': 'AreaChart',
+     // 'chartType': 'Table',
+     'containerId': 'chart_div',
+     dataTable: data,
+     'options': {
+       'height':300,
+       'chartArea': {'left':'10%', 'height': '70%', 'width': '70%'},
+       'pointSize': 2,
+       'isStacked': true,
+       'hAxis': {
+       				//format:'yyyy',
+       				gridlines: {count: 8},
+       				slantedText: true,
+       				maxAlternation: 5,
+       				textStyle: {fontSize: 11}
+       				},
+        },
+     }); 
+
+
+//Draw and initialise everything
+columnFilter.draw();
+OperatorPicker.draw();
+
+//Create a dashboard to connect to TimeRange
+var dashboard = new google.visualization.Dashboard(document.getElementById('dashboard_div'));
+dashboard.bind(TimeRange, chart);
+
+FilterOperatorEvent();
+
+google.visualization.events.addListener(columnFilter, 'statechange', FilterColumns);
+google.visualization.events.addListener(OperatorPicker, 'statechange', FilterOperatorEvent);
+
+
+//FUNCTIONS IN THE SAME SCOPE
+
+function FilterOperatorEvent(){ //Just to combine calls from event listener
+  FilterOperator();
+  FilterColumns();
+} 
+
+function FilterOperator(){  //Refresh Operators
+  var viewOperator = new google.visualization.DataView(data_init);
+  var OperatorState = OperatorPicker.getState();
+  viewOperator.setRows(viewOperator.getFilteredRows([{column:1, value: OperatorState.selectedValues[0]}]));
+  data = viewOperator.toDataTable();
+  data.removeColumn(1);
+}
+
+function FilterColumns(){ //Refresh Columns
+  var view = new google.visualization.DataView(data);
+  var ColumnState = columnFilter.getState();
+  var ColumnList = [0]; //"Year" column is always in the list
+  var row;
+
+  for (var i = 0; i < ColumnState.selectedValues.length; i++) {
+    row = columnsTable.getFilteredRows([{column: 1, value: ColumnState.selectedValues[i]}])[0];
+    ColumnList.push(columnsTable.getValue(row, 0));
+  }
+  
+  ColumnList.sort(function (a, b) {  
+        						  return (a - b);
+        						});  // sort the indices into their original order
+
+  view.setColumns(ColumnList);
+
+  chart.setDataTable(data);
+  chart.setView(view.toJSON());
+  chart.draw();
+
+  TimeRange.setDataTable(data);
+  //TimeRange.setView(view.toJSON()); - it breaks Google control for unknown reason
+  TimeRange.draw();
+}
+
+}
+
+</script>
+
+<title>Natality</title>
+</head>
+
+<body>
+<style type="text/css" media="screen">
+div.col-chart-2{
+width: 20%;
+max-width:200px;
+float:left;
+}
+div.col-chart-2 div.google-visualization-controls-categoryfilter-selected{
+width: 100%;
+max-width: 100% !important;
+
+}
+div.col-chart-10{
+width: 80%;
+float:right;
+}
+div#chart_div, div#controlrange_div, div#colFilter_div{
+max-width: 100%;
+}
+
+ 
+</style>
+<div id="dashboard_div">
+<div class="col-chart-2">
+
+<div id="OperatorPicker_div"></div>
+
+<br>
+
+<div id="columnFilter_div"></div>
+
+ 
+</div>
+<div class="col-chart-10">
+<div id="chart_div"></div>
+
+<div id="TimeRange_div"></div>
+ 
+</div>
+
+      
+
+</div>
+</body>
+</html>
